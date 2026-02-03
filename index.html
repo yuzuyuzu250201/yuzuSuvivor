@@ -11,14 +11,13 @@
 </head>
 <body>
     <script>
-        // --- 1. 메인 화면 씬 (StartScene) ---
+        // --- 1. 메인 화면 씬 ---
         class StartScene extends Phaser.Scene {
             constructor() { super('StartScene'); }
             preload() {
                 this.load.image('main_yuzu', 'main_yuzu.webp');
             }
             create() {
-                // 배경 그래디언트 효과 (임시 사각형으로 구현)
                 const graphics = this.add.graphics();
                 graphics.fillGradientStyle(0x1a1a1a, 0x1a1a1a, 0x4a4a4a, 0x4a4a4a, 1);
                 graphics.fillRect(0, 0, 800, 600);
@@ -26,14 +25,14 @@
                 this.add.image(400, 200, 'main_yuzu').setScale(0.5);
                 this.add.text(400, 350, '유즈 서바이버', { fontSize: '48px', fill: '#fff', fontWeight: 'bold' }).setOrigin(0.5);
                 
-                const startBtn = this.add.text(400, 450, '[ 게임 시작 ]', { fontSize: '32px', fill: '#ffcc00' })
+                this.add.text(400, 450, '[ 게임 시작 ]', { fontSize: '32px', fill: '#ffcc00' })
                     .setOrigin(0.5)
                     .setInteractive({ useHandCursor: true })
                     .on('pointerdown', () => this.scene.start('GameScene'));
             }
         }
 
-        // --- 2. 실제 게임 씬 (GameScene) ---
+        // --- 2. 게임 화면 씬 ---
         class GameScene extends Phaser.Scene {
             constructor() { super('GameScene'); }
 
@@ -42,20 +41,23 @@
                 this.load.image('enemy_wildyuzu', 'enemy_wildyuzu.webp');
                 this.load.image('weapon_gyul', 'weapon_gyul.webp');
                 
-                // 효과음 로드 (파일명은 임의로 지정, 파일이 있어야 소리가 납니다)
-                this.load.audio('snd_fire', 'fire.mp3'); 
-                this.load.audio('snd_hit', 'hit.mp3');
+                // 3. 무료 효과음 라이브러리 연결 (CDN)
+                this.load.audio('snd_fire', 'https://cdn.pixabay.com/audio/2022/03/15/audio_c8c8a73456.mp3'); // 뿅 소리
+                this.load.audio('snd_hit', 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c7443c.mp3');  // 타격음
+                this.load.audio('snd_gameover', 'https://cdn.pixabay.com/audio/2021/08/04/audio_c5815db18e.mp3'); // 게임오버
             }
 
             create() {
-                // 4. 배경 그래디언트 설정
+                // 배경
                 const bg = this.add.graphics();
                 bg.fillGradientStyle(0x000033, 0x000033, 0x660066, 0x660066, 1);
                 bg.fillRect(0, 0, 800, 600);
 
-                // 1. 스프라이트 크기 조절 (setScale 사용)
-                this.player = this.physics.add.sprite(400, 300, 'main_yuzu');
-                this.player.setScale(0.3); // 주인공 크기 조절
+                // 1. 라이프 설정
+                this.hp = 100;
+                this.hpText = this.add.text(20, 20, `HP: ${this.hp}`, { fontSize: '24px', fill: '#ff0000', fontWeight: 'bold' });
+
+                this.player = this.physics.add.sprite(400, 300, 'main_yuzu').setScale(0.3);
                 this.player.setCollideWorldBounds(true);
 
                 this.enemies = this.physics.add.group();
@@ -63,20 +65,31 @@
                 
                 this.weaponLevel = 1;
                 this.lastFired = 0;
+                this.isGameOver = false;
+
                 this.cursors = this.input.keyboard.createCursorKeys();
 
                 this.time.addEvent({ delay: 1000, callback: this.spawnEnemy, callbackScope: this, loop: true });
+                
+                // 충돌 설정
                 this.physics.add.overlap(this.weapons, this.enemies, this.hitEnemy, null, this);
+                this.physics.add.overlap(this.player, this.enemies, this.playerHit, null, this);
             }
 
             update(time) {
+                if (this.isGameOver) return;
+
+                // 이동
                 this.player.setVelocity(0);
                 if (this.cursors.left.isDown) this.player.setVelocityX(-200);
                 else if (this.cursors.right.isDown) this.player.setVelocityX(200);
                 if (this.cursors.up.isDown) this.player.setVelocityY(-200);
                 else if (this.cursors.down.isDown) this.player.setVelocityY(200);
 
-                if (time > this.lastFired) this.fireGyul(time);
+                // 2. 자동 에이밍 및 공격
+                if (time > this.lastFired) {
+                    this.fireGyul(time);
+                }
 
                 this.enemies.getChildren().forEach(enemy => {
                     this.physics.moveToObject(enemy, this.player, 100);
@@ -84,18 +97,23 @@
             }
 
             fireGyul(time) {
+                // 가장 가까운 적 찾기
+                const target = this.physics.closest(this.player, this.enemies.getChildren());
+
                 const shootCount = this.weaponLevel;
                 for (let i = 0; i < shootCount; i++) {
                     let gyul = this.weapons.get(this.player.x, this.player.y);
                     if (gyul) {
-                        gyul.setActive(true).setVisible(true);
-                        gyul.setScale(0.1); // 1. 귤 크기 아주 작게 조절
+                        gyul.setActive(true).setVisible(true).setScale(0.1);
                         
-                        const angle = (i * 0.3) - (shootCount * 0.15);
-                        this.physics.moveTo(gyul, this.player.x + 100, this.player.y + (angle * 200), 400);
-                        
-                        // 3. 발사 효과음
-                        if (this.sound.get('snd_fire')) this.sound.play('snd_fire', { volume: 0.5 });
+                        // 타겟이 있으면 타겟 방향으로, 없으면 오른쪽으로 발사
+                        if (target) {
+                            this.physics.moveToObject(gyul, target, 400);
+                        } else {
+                            gyul.body.velocity.x = 400;
+                        }
+
+                        if (this.sound.get('snd_fire')) this.sound.play('snd_fire', { volume: 0.3 });
 
                         this.time.delayedCall(1500, () => { gyul.setActive(false).setVisible(false); });
                     }
@@ -104,27 +122,53 @@
             }
 
             spawnEnemy() {
+                if (this.isGameOver) return;
                 const x = Phaser.Math.Between(0, 1) ? 0 : 800;
                 const y = Phaser.Math.Between(0, 600);
-                const enemy = this.enemies.create(x, y, 'enemy_wildyuzu');
-                enemy.setScale(0.2); // 1. 괴즈 크기 조절
+                const enemy = this.enemies.create(x, y, 'enemy_wildyuzu').setScale(0.2);
             }
 
             hitEnemy(weapon, enemy) {
                 weapon.setActive(false).setVisible(false);
                 enemy.destroy();
-                // 3. 처치 효과음
-                if (this.sound.get('snd_hit')) this.sound.play('snd_hit', { volume: 0.5 });
+                this.sound.play('snd_hit', { volume: 0.3 });
+            }
+
+            // 1. 플레이어 피격 및 사망 로직
+            playerHit(player, enemy) {
+                enemy.destroy(); // 부딪힌 적 제거
+                this.hp -= 10;   // 10만큼 데미지
+                this.hpText.setText(`HP: ${this.hp}`);
+
+                // 화면 흔들림 효과
+                this.cameras.main.shake(100, 0.01);
+
+                if (this.hp <= 0 && !this.isGameOver) {
+                    this.gameOver();
+                }
+            }
+
+            gameOver() {
+                this.isGameOver = true;
+                this.physics.pause();
+                this.player.setTint(0xff0000); // 주인공을 빨갛게
+                this.sound.play('snd_gameover');
+
+                this.add.text(400, 300, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontWeight: 'bold' }).setOrigin(0.5);
+                
+                const restartBtn = this.add.text(400, 400, '[ 다시 시작 ]', { fontSize: '32px', fill: '#ffffff' })
+                    .setOrigin(0.5)
+                    .setInteractive({ useHandCursor: true })
+                    .on('pointerdown', () => this.scene.restart());
             }
         }
 
-        // 게임 설정에 씬 등록
         const config = {
             type: Phaser.AUTO,
             width: 800,
             height: 600,
             physics: { default: 'arcade', arcade: { debug: false } },
-            scene: [StartScene, GameScene] // 메인 화면부터 시작
+            scene: [StartScene, GameScene]
         };
 
         const game = new Phaser.Game(config);
