@@ -2,12 +2,24 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Yuzu Survivor v1.01</title>
+    <title>Yuzu Survivor v1.02</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #111; overflow: hidden; }
-        canvas { border: 4px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        body { 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            background-color: #222; /* 외부 배경은 어둡게 */
+            overflow: hidden; 
+        }
+        /* 2. 화면 밖 라운드 모서리 처리 */
+        canvas { 
+            border-radius: 20px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
@@ -16,19 +28,13 @@
             constructor() { super('StartScene'); }
             preload() { this.load.image('main_yuzu', 'main_yuzu.webp'); }
             create() {
-                const graphics = this.add.graphics();
-                graphics.fillGradientStyle(0x0f0c29, 0x0f0c29, 0x302b63, 0x24243e, 1);
-                graphics.fillRect(0, 0, 800, 600);
-
+                // 배경 설정
+                this.cameras.main.setBackgroundColor('#F5F5DC');
                 this.add.image(400, 220, 'main_yuzu').setScale(0.5);
-                this.add.text(400, 380, '유즈 서바이버', { font: '60px "Black Han Sans"', fill: '#fff' }).setOrigin(0.5);
-                this.add.text(400, 430, 'v1.01 Patch', { font: '20px Arial', fill: '#aaa' }).setOrigin(0.5);
-                
-                const startBtn = this.add.text(400, 520, 'PUSH START', { font: '32px "Black Han Sans"', fill: '#ffcc00' })
+                this.add.text(400, 380, '유즈 서바이버', { font: '60px "Black Han Sans"', fill: '#444' }).setOrigin(0.5);
+                this.add.text(400, 520, 'CLICK TO START', { font: '28px "Black Han Sans"', fill: '#8b4513' })
                     .setOrigin(0.5).setInteractive({ useHandCursor: true })
                     .on('pointerdown', () => this.scene.start('GameScene'));
-                
-                this.tweens.add({ targets: startBtn, alpha: 0.5, duration: 800, yoyo: true, loop: -1 });
             }
         }
 
@@ -39,45 +45,42 @@
                 this.load.image('main_yuzu', 'main_yuzu.webp');
                 this.load.image('enemy_wildyuzu', 'enemy_wildyuzu.webp');
                 this.load.image('weapon_gyul', 'weapon_gyul.webp');
-                this.load.image('gem', 'https://labs.phaser.io/assets/sprites/diamonds/diamond16.png'); // 경험치 보석 대용
+                this.load.image('gem', 'https://labs.phaser.io/assets/sprites/diamonds/diamond16.png');
                 
-                // 1. 사운드 변경: 더 짧고 간결한 효과음
-                this.load.audio('snd_fire', 'https://cdn.pixabay.com/audio/2022/03/10/audio_502755096a.mp3'); // 숏 팝
-                this.load.audio('snd_hit', 'https://cdn.pixabay.com/audio/2021/08/04/audio_1049964581.mp3');  // 짧은 타격음
-                this.load.audio('snd_levelup', 'https://cdn.pixabay.com/audio/2021/08/04/audio_0629738f6b.mp3');
+                // 3. 사운드 라이브러리 재고려 (간결하고 명확한 사운드)
+                this.load.audio('snd_fire', 'https://cdn.pixabay.com/audio/2022/03/15/audio_730623630f.mp3'); // 짧은 스윙
+                this.load.audio('snd_hit', 'https://cdn.pixabay.com/audio/2021/08/04/audio_bb36440263.mp3');  // 가벼운 타격
+                this.load.audio('snd_levelup', 'https://cdn.pixabay.com/audio/2022/03/10/audio_502755096a.mp3'); // 레벨업 알림
             }
 
             create() {
-                // 배경 그래디언트
-                const bg = this.add.graphics();
-                bg.fillGradientStyle(0x1a2a6c, 0x1a2a6c, 0xb21f1f, 0xfdbb2d, 1);
-                bg.fillRect(0, 0, 800, 600);
+                // 2. 배경 베이지색 단일 톤
+                this.cameras.main.setBackgroundColor('#F5F5DC');
 
-                // 시스템 변수
+                // 초기 시스템 값
                 this.hp = 100;
                 this.level = 1;
                 this.exp = 0;
-                this.nextExp = 50; // 초기 요구 경험치
+                this.nextExp = 50;
                 this.maxLevel = 35;
-                this.weaponLevel = 1;
                 this.isGameOver = false;
+                this.lastFired = 0; // 초기 발사 시간 설정
 
-                // 3. UI 개선: 상단 경험치 바
-                this.expBarBg = this.add.graphics().fillStyle(0x333333).fillRect(0, 0, 800, 10);
+                // UI 설정
+                this.expBarBg = this.add.graphics().fillStyle(0xdddddd).fillRect(0, 0, 800, 10);
                 this.expBar = this.add.graphics();
                 this.updateExpBar();
-
-                this.statusText = this.add.text(20, 30, `Lv.${this.level}  HP: ${this.hp}`, { font: '24px "Black Han Sans"', fill: '#fff' });
+                this.statusText = this.add.text(20, 30, `Lv.${this.level}  HP: ${this.hp}`, { font: '24px "Black Han Sans"', fill: '#444' });
 
                 this.player = this.physics.add.sprite(400, 300, 'main_yuzu').setScale(0.3);
                 this.player.setCollideWorldBounds(true);
 
                 this.enemies = this.physics.add.group();
                 this.weapons = this.physics.add.group({ defaultKey: 'weapon_gyul', maxSize: 50 });
-                this.gems = this.physics.add.group(); // 경험치 그룹
+                this.gems = this.physics.add.group();
                 
                 this.cursors = this.input.keyboard.createCursorKeys();
-                this.time.addEvent({ delay: 1000, callback: this.spawnEnemy, callbackScope: this, loop: true });
+                this.time.addEvent({ delay: 1200, callback: this.spawnEnemy, callbackScope: this, loop: true });
                 
                 this.physics.add.overlap(this.weapons, this.enemies, this.hitEnemy, null, this);
                 this.physics.add.overlap(this.player, this.enemies, this.playerHit, null, this);
@@ -93,44 +96,50 @@
                 if (this.cursors.up.isDown) this.player.setVelocityY(-220);
                 else if (this.cursors.down.isDown) this.player.setVelocityY(220);
 
-                if (time > this.lastFired) this.fireGyul(time);
+                // 1. 버그 수정: 1레벨부터 공격 실행
+                if (time > this.lastFired) {
+                    this.fireGyul(time);
+                }
 
                 this.enemies.getChildren().forEach(enemy => {
-                    this.physics.moveToObject(enemy, this.player, 110);
+                    this.physics.moveToObject(enemy, this.player, 100);
                 });
             }
 
             updateExpBar() {
                 this.expBar.clear();
-                this.expBar.fillStyle(0x00ffcc);
+                this.expBar.fillStyle(0xffa500); // 귤 색상으로 경험치 바 변경
                 this.expBar.fillRect(0, 0, 800 * (this.exp / this.nextExp), 10);
             }
 
             fireGyul(time) {
                 const target = this.physics.closest(this.player, this.enemies.getChildren());
-                // 레벨에 따라 발사 수 조절 (35렙까지 점진적 증가)
                 const shootCount = 1 + Math.floor(this.level / 5); 
 
                 for (let i = 0; i < shootCount; i++) {
                     let gyul = this.weapons.get(this.player.x, this.player.y);
                     if (gyul) {
                         gyul.setActive(true).setVisible(true).setScale(0.12);
-                        const angleOffset = (i * 0.2) - (shootCount * 0.1);
+                        const angleOffset = (i * 0.3) - (shootCount * 0.15);
+                        
                         if (target) {
-                            this.physics.moveTo(gyul, target.x + (angleOffset*100), target.y, 450);
+                            // 에이밍 로직 강화
+                            const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y) + angleOffset;
+                            this.physics.velocityFromRotation(angle, 450, gyul.body.velocity);
                         } else {
                             gyul.body.velocity.x = 450;
                         }
+                        
                         this.sound.play('snd_fire', { volume: 0.2 });
                         this.time.delayedCall(1200, () => { gyul.setActive(false).setVisible(false); });
                     }
                 }
-                this.lastFired = time + Math.max(300, 800 - (this.level * 10)); // 렙업할수록 빨라짐
+                this.lastFired = time + Math.max(350, 900 - (this.level * 20));
             }
 
             spawnEnemy() {
                 if (this.isGameOver) return;
-                const spawnRange = 50;
+                const spawnRange = 100;
                 const x = Phaser.Math.Between(0, 1) ? -spawnRange : 800 + spawnRange;
                 const y = Phaser.Math.Between(0, 600);
                 this.enemies.create(x, y, 'enemy_wildyuzu').setScale(0.2);
@@ -138,15 +147,14 @@
 
             hitEnemy(weapon, enemy) {
                 weapon.setActive(false).setVisible(false);
-                // 적 죽을 때 보석 드롭
-                const gem = this.gems.create(enemy.x, enemy.y, 'gem').setScale(1.5);
+                this.gems.create(enemy.x, enemy.y, 'gem').setScale(1.2);
                 enemy.destroy();
-                this.sound.play('snd_hit', { volume: 0.2 });
+                this.sound.play('snd_hit', { volume: 0.15 });
             }
 
             collectGem(player, gem) {
                 gem.destroy();
-                this.exp += 20;
+                this.exp += 25;
                 if (this.exp >= this.nextExp && this.level < this.maxLevel) {
                     this.levelUp();
                 }
@@ -157,11 +165,10 @@
             levelUp() {
                 this.level++;
                 this.exp = 0;
-                this.nextExp = Math.floor(this.nextExp * 1.2); // 요구량 20%씩 증가
-                this.sound.play('snd_levelup');
+                this.nextExp = Math.floor(this.nextExp * 1.25);
+                this.sound.play('snd_levelup', { volume: 0.4 });
                 
-                // 레벨업 텍스트 연출
-                const txt = this.add.text(400, 300, 'LEVEL UP!', { font: '48px "Black Han Sans"', fill: '#ffff00' }).setOrigin(0.5);
+                const txt = this.add.text(400, 300, 'LEVEL UP!', { font: '40px "Black Han Sans"', fill: '#e67e22' }).setOrigin(0.5);
                 this.tweens.add({ targets: txt, y: 200, alpha: 0, duration: 1000, onComplete: () => txt.destroy() });
             }
 
@@ -177,8 +184,8 @@
                 this.isGameOver = true;
                 this.physics.pause();
                 this.player.setTint(0xff0000);
-                this.add.text(400, 300, 'GAME OVER', { font: '64px "Black Han Sans"', fill: '#ff0000' }).setOrigin(0.5);
-                const restartBtn = this.add.text(400, 420, 'RETRY?', { font: '32px "Black Han Sans"', fill: '#fff' })
+                this.add.text(400, 300, 'GAME OVER', { font: '64px "Black Han Sans"', fill: '#c0392b' }).setOrigin(0.5);
+                this.add.text(400, 400, 'CLICK TO RETRY', { font: '24px "Black Han Sans"', fill: '#444' })
                     .setOrigin(0.5).setInteractive({ useHandCursor: true })
                     .on('pointerdown', () => this.scene.restart());
             }
